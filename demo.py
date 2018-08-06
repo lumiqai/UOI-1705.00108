@@ -100,6 +100,34 @@ if os.path.exists(MODEL_LM_PATH):
 else:
     bi_lm_model = BiLM(token_num=len(word_dict), rnn_units=100)
 
+    def lm_batch_generator(sentences, steps):
+        global word_dict, char_dict, max_word_len
+        while True:
+            for i in range(steps):
+                batch_sentences = sentences[BATCH_SIZE * i:min(BATCH_SIZE * (i + 1), len(sentences))]
+                inputs, outputs = BiLM.get_batch(
+                    sentences=batch_sentences,
+                    token_dict=word_dict,
+                    ignore_case=True,
+                )
+                yield inputs, outputs
+
+    print('Fitting Bi-LM...')
+    bi_lm_model.model.fit_generator(
+        generator=lm_batch_generator(sentences=train_sentences, steps=train_steps),
+        steps_per_epoch=train_steps,
+        epochs=EPOCHS,
+        validation_data=lm_batch_generator(sentences=valid_sentences, steps=valid_steps),
+        validation_steps=valid_steps,
+        callbacks=[
+            keras.callbacks.EarlyStopping(monitor='val_loss', patience=2),
+            keras.callbacks.EarlyStopping(monitor='val_Bi-LM-Dense-Forward_sparse_categorical_accuracy', patience=2),
+            keras.callbacks.EarlyStopping(monitor='val_Bi-LM-Dense-Backward_sparse_categorical_accuracy', patience=2),
+        ],
+        verbose=True,
+    )
+    bi_lm_model.save_model(MODEL_LM_PATH)
+
 
 def batch_generator(sentences, taggings, steps, training=True):
     global word_dict, char_dict, max_word_len
