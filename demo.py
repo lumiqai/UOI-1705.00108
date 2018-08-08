@@ -17,11 +17,8 @@ DATA_TEST_PATH = os.path.join(DATA_ROOT, 'test.txt')
 
 WORD_EMBD_PATH = 'dataset/glove.6B.100d.txt'
 
-RNN_NUM = 16
-RNN_UNITS = 32
-
-BATCH_SIZE = 16
-EPOCHS = 10
+BATCH_SIZE = 1
+EPOCHS = 1
 
 TAGS = {
     'O': 0,
@@ -76,19 +73,24 @@ if os.path.exists(WORD_EMBD_PATH):
         '': 0,
         '<UNK>': 1,
     }
+    word_embd_weights = [
+        [0.0] * 100,
+        numpy.random.random((100,)).tolist(),
+    ]
     with codecs.open(WORD_EMBD_PATH, 'r', 'utf8') as reader:
-        for line in reader:
+        for line_num, line in enumerate(reader):
+            if (line_num + 1) % 1000 == 0:
+                print('Load embedding... %d' % (line_num + 1), end='\r', flush=True)
             line = line.strip()
             if not line:
                 continue
-            word = line.split()[0].lower()
+            parts = line.split()
+            word = parts[0].lower()
             if word not in word_dict:
                 word_dict[word] = len(word_dict)
-    word_embd_weights = get_embedding_weights_from_file(
-        word_dict,
-        WORD_EMBD_PATH,
-        ignore_case=True,
-    )
+                word_embd_weights.append(parts[1:])
+    word_embd_weights = numpy.asarray(word_embd_weights)
+    print('Dict size: %d  Shape of weights: %s' % (len(word_dict), str(word_embd_weights.shape)))
 else:
     word_embd_weights = None
 
@@ -98,7 +100,13 @@ valid_steps = (len(valid_sentences) + BATCH_SIZE - 1) // BATCH_SIZE
 if os.path.exists(MODEL_LM_PATH):
     bi_lm_model = BiLM(model_path=MODEL_LM_PATH)
 else:
-    bi_lm_model = BiLM(token_num=len(word_dict), rnn_units=100)
+    bi_lm_model = BiLM(
+        token_num=len(word_dict),
+        rnn_units=100,
+        embedding_weights=word_embd_weights,
+        embedding_dim=100,
+    )
+    bi_lm_model.model.summary()
 
     def lm_batch_generator(sentences, steps):
         global word_dict, char_dict, max_word_len
@@ -146,10 +154,12 @@ def batch_generator(sentences, taggings, steps, training=True):
             if not training:
                 yield [word_input, char_input], batch_taggings
                 continue
+                pass
             sentence_len = word_input.shape[1]
             for j in range(len(batch_taggings)):
                 batch_taggings[j] = batch_taggings[j] + [0] * (sentence_len - len(batch_taggings[j]))
-            batch_taggings = keras.utils.to_categorical(numpy.asarray(batch_taggings), len(TAGS))
+                batch_taggings[j] = [[tag] for tag in batch_taggings[j]]
+            batch_taggings = numpy.asarray(batch_taggings)
             yield [word_input, char_input], batch_taggings
         if not training:
             break
@@ -158,6 +168,9 @@ def batch_generator(sentences, taggings, steps, training=True):
 model = build_model(word_dict_len=len(word_dict),
                     char_dict_len=len(char_dict),
                     max_word_len=max_word_len,
+                    word_dim=100,
+                    char_dim=80,
+                    char_embd_dim=25,
                     output_dim=len(TAGS),
                     bi_lm_model=bi_lm_model,
                     word_embd_weights=word_embd_weights)
@@ -171,6 +184,7 @@ print('Fitting...')
 model.fit_generator(
     generator=batch_generator(train_sentences, train_taggings, train_steps),
     steps_per_epoch=train_steps,
+    steps_per_epoch=1,
     epochs=EPOCHS,
     validation_data=batch_generator(valid_sentences, valid_taggings, valid_steps),
     validation_steps=valid_steps,
@@ -208,8 +222,8 @@ def get_tags(tags):
 eps = 1e-6
 total_pred, total_true, matched_num = 0, 0, 0.0
 for inputs, batch_taggings in batch_generator(
-        test_sentences,
-        test_taggings,
+        train_sentences,
+        train_taggings,
         test_steps,
         training=False):
     predict = model.predict_on_batch(inputs)

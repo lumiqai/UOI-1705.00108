@@ -69,7 +69,16 @@ def build_model(word_dict_len,
         ),
         name='Bi-RNN-2',
     )(dropout_layer_2)
-    dense_layer = keras.layers.Dense(units=output_dim, activation='softmax', name='Dense')(bi_rnn_layer_2)
+    dense_layer = keras.layers.Dense(units=output_dim, name='Dense')(bi_rnn_layer_2)
+
+    model = keras.models.Model(inputs=inputs, outputs=dense_layer)
+    model.compile(
+        optimizer = keras.optimizers.Adam(),
+        loss='sparse_categorical_crossentropy',
+        metrics=['sparse_categorical_accuracy'],
+    )
+    # return model
+
     crf_layer = CRF(
         units=output_dim,
         sparse_target=True,
