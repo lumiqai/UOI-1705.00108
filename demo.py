@@ -17,8 +17,8 @@ DATA_TEST_PATH = os.path.join(DATA_ROOT, 'test.txt')
 
 WORD_EMBD_PATH = 'dataset/glove.6B.100d.txt'
 
-BATCH_SIZE = 1
-EPOCHS = 1
+BATCH_SIZE = 16
+EPOCHS = 10
 
 TAGS = {
     'O': 0,
@@ -72,9 +72,11 @@ if os.path.exists(WORD_EMBD_PATH):
     word_dict = {
         '': 0,
         '<UNK>': 1,
+        '<EOS>': 2,
     }
     word_embd_weights = [
         [0.0] * 100,
+        numpy.random.random((100,)).tolist(),
         numpy.random.random((100,)).tolist(),
     ]
     with codecs.open(WORD_EMBD_PATH, 'r', 'utf8') as reader:
@@ -93,6 +95,7 @@ if os.path.exists(WORD_EMBD_PATH):
     print('Dict size: %d  Shape of weights: %s' % (len(word_dict), str(word_embd_weights.shape)))
 else:
     word_embd_weights = None
+    print('Dict size: %d' % len(word_dict))
 
 train_steps = (len(train_sentences) + BATCH_SIZE - 1) // BATCH_SIZE
 valid_steps = (len(valid_sentences) + BATCH_SIZE - 1) // BATCH_SIZE
@@ -184,13 +187,12 @@ print('Fitting...')
 model.fit_generator(
     generator=batch_generator(train_sentences, train_taggings, train_steps),
     steps_per_epoch=train_steps,
-    steps_per_epoch=1,
     epochs=EPOCHS,
     validation_data=batch_generator(valid_sentences, valid_taggings, valid_steps),
     validation_steps=valid_steps,
     callbacks=[
         keras.callbacks.EarlyStopping(monitor='val_loss', patience=2),
-        keras.callbacks.EarlyStopping(monitor='val_categorical_accuracy', patience=2),
+        keras.callbacks.EarlyStopping(monitor='val_acc', patience=2),
     ],
     verbose=True,
 )

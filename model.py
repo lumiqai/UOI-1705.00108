@@ -14,7 +14,6 @@ def build_model(word_dict_len,
                 word_dim=300,
                 char_dim=80,
                 char_embd_dim=25,
-                lmbd=0.01,
                 word_embd_weights=None):
     """Build model for NER.
 
@@ -29,7 +28,6 @@ def build_model(word_dict_len,
     :param rnn_type: The type of the two RNN layers.
     :param char_dim: The final dimension of character embedding.
     :param char_embd_dim: The embedding dimension of characters before bidirectional RNN.
-    :param lmbd: A constant controlling the weights of losses.
     :param word_embd_weights: Pre-trained embeddings for words.
 
     :return model: The built model.
@@ -70,14 +68,6 @@ def build_model(word_dict_len,
         name='Bi-RNN-2',
     )(dropout_layer_2)
     dense_layer = keras.layers.Dense(units=output_dim, name='Dense')(bi_rnn_layer_2)
-
-    model = keras.models.Model(inputs=inputs, outputs=dense_layer)
-    model.compile(
-        optimizer = keras.optimizers.Adam(),
-        loss='sparse_categorical_crossentropy',
-        metrics=['sparse_categorical_accuracy'],
-    )
-    # return model
 
     crf_layer = CRF(
         units=output_dim,
