@@ -18,7 +18,7 @@ DATA_TEST_PATH = os.path.join(DATA_ROOT, 'test.txt')
 WORD_EMBD_PATH = 'dataset/glove.6B.100d.txt'
 
 BATCH_SIZE = 16
-EPOCHS = 10
+EPOCHS = 0
 
 TAGS = {
     'O': 0,
@@ -66,19 +66,11 @@ dicts_generator = get_dicts_generator(
 for sentence in train_sentences:
     dicts_generator(sentence)
 word_dict, char_dict, max_word_len = dicts_generator(return_dict=True)
+word_dict['<EOS>'] = len(word_dict)
 
 if os.path.exists(WORD_EMBD_PATH):
     print('Embedding...')
-    word_dict = {
-        '': 0,
-        '<UNK>': 1,
-        '<EOS>': 2,
-    }
-    word_embd_weights = [
-        [0.0] * 100,
-        numpy.random.random((100,)).tolist(),
-        numpy.random.random((100,)).tolist(),
-    ]
+    word_embd_weights = [[0.0] * 100] + numpy.random.random((len(word_dict) - 1, 100)).tolist()
     with codecs.open(WORD_EMBD_PATH, 'r', 'utf8') as reader:
         for line_num, line in enumerate(reader):
             if (line_num + 1) % 1000 == 0:
@@ -88,9 +80,8 @@ if os.path.exists(WORD_EMBD_PATH):
                 continue
             parts = line.split()
             word = parts[0].lower()
-            if word not in word_dict:
-                word_dict[word] = len(word_dict)
-                word_embd_weights.append(parts[1:])
+            if word in word_dict:
+                word_embd_weights[word_dict[word]] = parts[1:]
     word_embd_weights = numpy.asarray(word_embd_weights)
     print('Dict size: %d  Shape of weights: %s' % (len(word_dict), str(word_embd_weights.shape)))
 else:
@@ -120,6 +111,8 @@ else:
                     sentences=batch_sentences,
                     token_dict=word_dict,
                     ignore_case=True,
+                    unk_index=word_dict['<UNK>'],
+                    eos_index=word_dict['<EOS>'],
                 )
                 yield inputs, outputs
 
@@ -138,6 +131,21 @@ else:
         verbose=True,
     )
     bi_lm_model.save_model(MODEL_LM_PATH)
+
+
+def lm_batch_generator(sentences, steps):
+    global word_dict, char_dict, max_word_len
+    while True:
+        for i in range(steps):
+            batch_sentences = sentences[BATCH_SIZE * i:min(BATCH_SIZE * (i + 1), len(sentences))]
+            inputs, outputs = BiLM.get_batch(
+                sentences=batch_sentences,
+                token_dict=word_dict,
+                ignore_case=True,
+                unk_index=word_dict['<UNK>'],
+                eos_index=word_dict['<EOS>'],
+            )
+            yield inputs, outputs
 
 
 def batch_generator(sentences, taggings, steps, training=True):
@@ -224,8 +232,8 @@ def get_tags(tags):
 eps = 1e-6
 total_pred, total_true, matched_num = 0, 0, 0.0
 for inputs, batch_taggings in batch_generator(
-        train_sentences,
-        train_taggings,
+        test_sentences,
+        test_taggings,
         test_steps,
         training=False):
     predict = model.predict_on_batch(inputs)
