@@ -1,0 +1,3 @@
+[submodule "dataset/CoNNL2003eng"]
+	path = dataset/CoNNL2003eng
+	url = https://github.com/PoWWoP/CoNNL2003eng.git

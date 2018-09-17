@@ -3,7 +3,7 @@ import codecs
 import numpy
 import keras
 from keras_bi_lm import BiLM
-from keras_wc_embd import get_dicts_generator, get_batch_input, get_embedding_weights_from_file
+from keras_wc_embd import get_dicts_generator, get_batch_input
 from model import build_model
 
 
